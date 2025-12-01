@@ -1,13 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Geoplayground – Bubble Graph</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Geoplayground – Bubble Graph Builder</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <div class="topbar">
+    <div class="brand">Geoplayground</div>
+    <div class="controls">
+      <button class="toolBtn active" data-tool="select">Select</button>
+      <button class="toolBtn" data-tool="line">Line</button>
+      <button class="toolBtn" data-tool="erase">Erase</button>
+
+      <button id="btnReset">Reset View</button>
+      <button id="btnSave">Save</button>
+      <button id="btnLoad">Load</button>
+      <button id="btnPNG">Export PNG</button>
+    </div>
+  </div>
+
   <canvas id="bubbleCanvas"></canvas>
+
+  <div class="statusbar">
+    <div id="stTool">Tool: Select</div>
+    <div id="stPos">x: –  y: –</div>
+  </div>
+
+  <input type="file" id="fileInput" accept=".json" style="display:none" />
+
   <script src="app.js"></script>
 </body>
 </html>
