@@ -1,19 +1,106 @@
-/* Make the canvas fill the window and keep everything black */
+:root {
+  --bg: #000;
+  --fg: #fff;
+  --accent: #ffe36a;
+  --muted: #9aa3ae;
+}
 
+/* Global */
+* {
+  box-sizing: border-box;
+}
 html, body {
   margin: 0;
   padding: 0;
   height: 100%;
   width: 100%;
   overflow: hidden;
-  background: #000;
+  background: var(--bg);
+  color: var(--fg);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+/* Top bar */
+.topbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(0,0,0,0.85);
+  border-bottom: 1px solid #111;
+  z-index: 10;
+}
+.brand {
+  font-weight: 700;
+  margin-right: 12px;
+}
+.controls {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+button {
+  border-radius: 8px;
+  padding: 6px 10px;
+  border: 1px solid #222;
+  background: #101010;
+  color: var(--fg);
+  font-size: 13px;
+  cursor: pointer;
+}
+button:hover {
+  border-color: #333;
+}
+.toolBtn.active {
+  outline: 2px solid var(--accent);
+}
+
+/* Canvas fills space between topbar and statusbar */
 #bubbleCanvas {
-  display: block;
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 56px;
+  bottom: 28px;
   width: 100%;
-  height: 100%;
-  background: #000;
-  cursor: none; /* hide default cursor, we’ll use the yellow dot instead */
+  height: calc(100% - 56px - 28px);
+  display: block;
+  background: var(--bg);
+  cursor: none; /* we draw our own yellow dot */
+}
+
+/* Status bar */
+.statusbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  background: rgba(0,0,0,0.85);
+  border-top: 1px solid #111;
+  color: var(--muted);
+  font-size: 12px;
+  gap: 16px;
+}
+#stTool {
+  color: var(--fg);
+}
+
+/* Responsive tweak */
+@media (max-width: 600px) {
+  .topbar {
+    height: auto;
+    flex-wrap: wrap;
+  }
+  #bubbleCanvas {
+    top: 72px;
+    height: calc(100% - 72px - 28px);
+  }
 }
