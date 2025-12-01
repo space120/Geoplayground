@@ -1,35 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Geoplayground – Bubble Graph Builder</title>
-  <link rel="stylesheet" href="style.css" />
+    <meta charset="UTF-8">
+    <title>GeoPlayground</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="topbar">
-    <div class="brand">Geoplayground</div>
-    <div class="controls">
-      <button class="toolBtn active" data-tool="select">Select</button>
-      <button class="toolBtn" data-tool="line">Line</button>
-      <button class="toolBtn" data-tool="erase">Erase</button>
 
-      <button id="btnReset">Reset View</button>
-      <button id="btnSave">Save</button>
-      <button id="btnLoad">Load</button>
-      <button id="btnPNG">Export PNG</button>
-    </div>
-  </div>
+<div id="toolbar">
+    <button onclick="setTool('line')">Line</button>
+    <button onclick="setTool('erase')">Erase</button>
+    <button onclick="resetView()">Reset</button>
+    <button onclick="saveFile()">Save</button>
+    <button onclick="loadFile()">Load</button>
+    <input type="file" id="fileInput" style="display:none">
+</div>
 
-  <canvas id="bubbleCanvas"></canvas>
+<canvas id="canvas"></canvas>
 
-  <div class="statusbar">
-    <div id="stTool">Tool: Select</div>
-    <div id="stPos">x: –  y: –</div>
-  </div>
+<div id="cursorDot"></div>
 
-  <input type="file" id="fileInput" accept=".json" style="display:none" />
-
-  <script src="app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
