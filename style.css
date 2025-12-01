@@ -1,0 +1,13 @@
+/* Full-screen canvas */
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background-color: black;
+}
+
+canvas {
+    display: block;
+    background-color: black;
+}
