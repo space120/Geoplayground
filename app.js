@@ -90,7 +90,9 @@ function drawGrid() {
   ctx.scale(zoom, zoom);
 
   // thin white circles
-  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+  // Soft blueprint gray-blue (best for eyes)
+ctx.strokeStyle = 'rgba(92,122,255,0.55)'; // #5c7aff
+
   ctx.lineWidth = 1 / zoom;
 
   // visible world bounds
