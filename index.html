@@ -1,35 +1,95 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Geoplayground – Bubble Graph Builder</title>
-  <link rel="stylesheet" href="style.css" />
+<meta charset="UTF-8">
+<title>Geoplayground</title>
+<style>
+    body {
+        margin: 0;
+        background: #000;
+        color: #fff;
+        font-family: system-ui, sans-serif;
+        overflow: hidden;
+    }
+
+    .topbar {
+        height: 50px;
+        background: #111;
+        border-bottom: 1px solid #222;
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        gap: 12px;
+        user-select: none;
+    }
+
+    .topbar button,
+    .topbar select,
+    .topbar input[type="color"] {
+        background: #222;
+        color: #fff;
+        border: 1px solid #333;
+        padding: 6px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+    #bubbleCanvas {
+        position: absolute;
+        top: 50px;
+        left: 0;
+        width: 100vw;
+        height: calc(100vh - 50px);
+        display: block;
+        cursor: none;
+    }
+
+    .statusbar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        height: 28px;
+        width: 100%;
+        background: #111;
+        border-top: 1px solid #222;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 0 12px;
+        font-size: 13px;
+        color: #aaa;
+        user-select: none;
+    }
+</style>
 </head>
 <body>
-  <div class="topbar">
-    <div class="brand">Geoplayground</div>
-    <div class="controls">
-      <button class="toolBtn active" data-tool="select">Select</button>
-      <button class="toolBtn" data-tool="line">Line</button>
-      <button class="toolBtn" data-tool="erase">Erase</button>
 
-      <button id="btnReset">Reset View</button>
-      <button id="btnSave">Save</button>
-      <button id="btnLoad">Load</button>
-      <button id="btnPNG">Export PNG</button>
-    </div>
-  </div>
+<div class="topbar">
+    <button class="toolBtn" data-tool="select">Select</button>
+    <button class="toolBtn" data-tool="line">Line</button>
+    <button class="toolBtn" data-tool="shape">Shape</button>
+    <button class="toolBtn" data-tool="erase">Erase</button>
 
-  <canvas id="bubbleCanvas"></canvas>
+    <button id="btnDim">Dimensions: Off</button>
 
-  <div class="statusbar">
-    <div id="stTool">Tool: Select</div>
-    <div id="stPos">x: –  y: –</div>
-  </div>
+    <input type="color" id="colorPicker" value="#00ff55">
 
-  <input type="file" id="fileInput" accept=".json" style="display:none" />
+    <button id="btnReset">Reset View</button>
+    <button id="btnSave">Save</button>
+    <button id="btnLoad">Load</button>
+    <button id="btnPNG">PNG</button>
 
-  <script src="app.js"></script>
+    <input type="file" id="fileInput" style="display:none;">
+</div>
+
+<canvas id="bubbleCanvas"></canvas>
+
+<div class="statusbar">
+    <div id="stTool">Tool: select</div>
+    <div id="stTransform">Transform: move</div>
+    <div id="stPos">x:0 y:0</div>
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>
