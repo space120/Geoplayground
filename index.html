@@ -21,6 +21,8 @@
         padding: 0 12px;
         gap: 12px;
         user-select: none;
+        z-index: 10;
+        position: relative;
     }
 
     .topbar button,
@@ -32,6 +34,11 @@
         padding: 6px 10px;
         border-radius: 6px;
         cursor: pointer;
+        font-size: 13px;
+    }
+
+    .topbar button:hover {
+        border-color: #555;
     }
 
     #bubbleCanvas {
@@ -39,7 +46,7 @@
         top: 50px;
         left: 0;
         width: 100vw;
-        height: calc(100vh - 50px);
+        height: calc(100vh - 50px - 28px);
         display: block;
         cursor: none;
     }
@@ -59,6 +66,90 @@
         font-size: 13px;
         color: #aaa;
         user-select: none;
+        z-index: 10;
+    }
+
+    /* Right-side preset drawer */
+    .preset-drawer {
+        position: fixed;
+        top: 50px;
+        right: 0;
+        bottom: 28px;
+        width: 230px;
+        background: #111;
+        border-left: 1px solid #222;
+        transform: translateX(100%);
+        transition: transform 0.2s ease;
+        z-index: 20;
+        display: flex;
+        flex-direction: column;
+        padding: 10px;
+        box-sizing: border-box;
+    }
+
+    .preset-drawer.open {
+        transform: translateX(0);
+    }
+
+    .preset-header {
+        font-weight: 600;
+        margin-bottom: 6px;
+        font-size: 14px;
+    }
+
+    .preset-sub {
+        font-size: 12px;
+        color: #bbb;
+        margin-bottom: 10px;
+    }
+
+    .preset-group-title {
+        margin-top: 10px;
+        margin-bottom: 4px;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #999;
+    }
+
+    .preset-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 8px;
+    }
+
+    .preset-btn {
+        flex: 1 1 45%;
+        padding: 6px 4px;
+        font-size: 12px;
+        border-radius: 6px;
+        border: 1px solid #333;
+        background: #1a1a1a;
+        color: #fff;
+        cursor: pointer;
+    }
+
+    .preset-btn.active {
+        border-color: #ffe36a;
+        box-shadow: 0 0 0 1px rgba(255,227,106,0.4);
+    }
+
+    .preset-slider-row {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #ccc;
+    }
+
+    .preset-slider-row input[type="range"] {
+        width: 100%;
+    }
+
+    .preset-hint {
+        margin-top: 10px;
+        font-size: 11px;
+        color: #888;
+        line-height: 1.4;
     }
 </style>
 </head>
@@ -80,7 +171,38 @@
     <button id="btnLoad">Load</button>
     <button id="btnPNG">PNG</button>
 
+    <button id="btnPresets" style="margin-left:auto;">Presets ▸</button>
+
     <input type="file" id="fileInput" style="display:none;">
+</div>
+
+<!-- Right-side preset drawer -->
+<div class="preset-drawer" id="presetDrawer">
+    <div class="preset-header">Shape Presets</div>
+    <div class="preset-sub">Choose a shape, then click on the grid to place it.</div>
+
+    <div class="preset-group-title">2D</div>
+    <div class="preset-buttons">
+        <button class="preset-btn" id="presetTriangle">Triangle</button>
+        <button class="preset-btn" id="presetHexagon">Hexagon</button>
+    </div>
+
+    <div class="preset-group-title">3D / 4D Projections</div>
+    <div class="preset-buttons">
+        <button class="preset-btn" id="presetCube">Cube (3D)</button>
+        <button class="preset-btn" id="presetTesseract">Tesseract Frame</button>
+    </div>
+
+    <div class="preset-slider-row">
+        <div>Preset Size</div>
+        <input type="range" id="presetSize" min="0.5" max="2.5" step="0.1" value="1.0">
+    </div>
+
+    <div class="preset-hint">
+        • A white ghost preview follows your cursor.<br>
+        • Click to place the shape.<br>
+        • Press <strong>Esc</strong> to cancel preset mode.<br>
+    </div>
 </div>
 
 <canvas id="bubbleCanvas"></canvas>
