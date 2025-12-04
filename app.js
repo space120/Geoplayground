@@ -1,6 +1,6 @@
-// Geoplayground – Bubble Graph Builder (with Preset Drawer + Ghost Preview)
+// Geoplayground — Bubble Graph Builder (with presets, snap modes, and file/export menu)
 
-// ---------- Canvas & DOM ----------
+// ---------- DOM ----------
 const canvas = document.getElementById('bubbleCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -10,15 +10,12 @@ const statusPos = document.getElementById('stPos');
 const statusTransform = document.getElementById('stTransform');
 
 const btnReset = document.getElementById('btnReset');
-const btnClear = document.getElementById('btnClear');
-const btnSave = document.getElementById('btnSave');
-const btnLoad = document.getElementById('btnLoad');
-const btnPNG = document.getElementById('btnPNG');
 const btnDim = document.getElementById('btnDim');
-const fileInput = document.getElementById('fileInput');
 const colorPicker = document.getElementById('colorPicker');
 
-// Preset drawer elements
+const fileInput = document.getElementById('fileInput');
+const fileMenuItems = Array.from(document.querySelectorAll('.menu-item'));
+
 const btnPresets = document.getElementById('btnPresets');
 const presetDrawer = document.getElementById('presetDrawer');
 const presetTriangleBtn = document.getElementById('presetTriangle');
@@ -26,6 +23,9 @@ const presetHexagonBtn = document.getElementById('presetHexagon');
 const presetCubeBtn = document.getElementById('presetCube');
 const presetTesseractBtn = document.getElementById('presetTesseract');
 const presetSizeSlider = document.getElementById('presetSize');
+const snapModeSelect = document.getElementById('snapModeSelect');
+
+const btnExportAll = document.getElementById('btnExportAll');
 
 const presetButtons = [
   presetTriangleBtn,
@@ -34,7 +34,7 @@ const presetButtons = [
   presetTesseractBtn
 ];
 
-// ---------- Size / DPR ----------
+// ---------- Canvas size / DPR ----------
 let width, height;
 let dpr = Math.min(window.devicePixelRatio || 1, 2);
 
@@ -47,6 +47,7 @@ function resizeCanvas() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   render();
 }
+
 window.addEventListener('resize', resizeCanvas);
 
 // ---------- View state ----------
@@ -78,9 +79,12 @@ const state = {
   transformDrag: null,
   rotateSnap: true,
 
-  // Preset placement system
+  // Snap modes: 'grid' | 'gridMid' | 'free'
+  snapMode: 'grid',
+
+  // Presets
   presetActive: false,
-  presetType: null,     // 'triangle' | 'hexagon' | 'cube' | 'tesseract'
+  presetType: null,
   presetScale: 1.0
 };
 
@@ -98,21 +102,62 @@ function worldToScreen(wx, wy) {
   };
 }
 
-// ---------- Snap-to-center ----------
-function snapToHexCenter(wx, wy) {
+// ---------- Grid snapping ----------
+function nearestHexCenter(wx, wy) {
   const r = Math.round(wy / STEP_Y);
-  const rowOffset = (r % 2) ? STEP_X / 2 : 0;
-  const c = Math.round((wx - rowOffset) / STEP_X);
+  const offset = (r % 2) ? STEP_X / 2 : 0;
+  const c = Math.round((wx - offset) / STEP_X);
   return {
-    x: c * STEP_X + rowOffset,
+    x: c * STEP_X + offset,
     y: r * STEP_Y
   };
 }
-function maybeSnapPoint(p) {
-  const t = snapToHexCenter(p.x, p.y);
-  const dist = Math.hypot(p.x - t.x, p.y - t.y);
-  if (dist < STEP_X * 0.25) return t;
-  return p;
+
+function computeSnapCandidates(wx, wy) {
+  const center = nearestHexCenter(wx, wy);
+
+  // immediate hex neighbors (approx)
+  const g = [];
+  g.push(center);
+  g.push({ x: center.x + STEP_X, y: center.y });
+  g.push({ x: center.x - STEP_X, y: center.y });
+  g.push({ x: center.x + STEP_X / 2, y: center.y + STEP_Y });
+  g.push({ x: center.x - STEP_X / 2, y: center.y + STEP_Y });
+  g.push({ x: center.x + STEP_X / 2, y: center.y - STEP_Y });
+  g.push({ x: center.x - STEP_X / 2, y: center.y - STEP_Y });
+
+  const mids = [];
+  for (let i = 1; i < g.length; i++) {
+    const a = center;
+    const b = g[i];
+    mids.push({
+      x: (a.x + b.x) / 2,
+      y: (a.y + b.y) / 2
+    });
+  }
+
+  return { grid: g, midpoints: mids };
+}
+
+function snapPointForMode(worldPoint) {
+  if (state.snapMode === 'free') return { ...worldPoint };
+
+  const { grid, midpoints } = computeSnapCandidates(worldPoint.x, worldPoint.y);
+  const candidates = (state.snapMode === 'gridMid')
+    ? grid.concat(midpoints)
+    : grid;
+
+  let best = worldPoint;
+  let bestDist = Infinity;
+
+  for (const p of candidates) {
+    const d = Math.hypot(p.x - worldPoint.x, p.y - worldPoint.y);
+    if (d < bestDist) {
+      bestDist = d;
+      best = p;
+    }
+  }
+  return best;
 }
 
 // ---------- Draw grid ----------
@@ -123,7 +168,7 @@ function drawGrid() {
 
   ctx.translate(width / 2 + panX, height / 2 + panY);
   ctx.scale(zoom, zoom);
-  ctx.strokeStyle = 'rgba(168,85,247,0.6)';
+  ctx.strokeStyle = 'rgba(168,85,247,0.6)'; // violet/purple
   ctx.lineWidth = 1 / zoom;
 
   const topLeft = screenToWorld(0, 0);
@@ -169,7 +214,7 @@ function drawDimensionForLine(ln) {
   ctx.restore();
 }
 
-// ---------- Draw lines & previews ----------
+// ---------- Draw lines & shape previews ----------
 function drawLines() {
   ctx.save();
   ctx.translate(width / 2 + panX, height / 2 + panY);
@@ -177,7 +222,7 @@ function drawLines() {
 
   state.lines.forEach((ln, i) => {
     const selected = state.selection.has(i);
-    ctx.strokeStyle = selected ? '#ffe36a' : (ln.color || '#00ff55');
+    ctx.strokeStyle = selected ? '#ffe36a' : (ln.color || '#00ff55'); // yellow / neon green
     ctx.lineWidth = selected ? (3 / zoom) : (2 / zoom);
 
     ctx.beginPath();
@@ -188,6 +233,7 @@ function drawLines() {
     if (state.showDimensions) drawDimensionForLine(ln);
   });
 
+  // live line
   if (state.drawingLine) {
     ctx.strokeStyle = state.currentColor;
     ctx.lineWidth = 2 / zoom;
@@ -199,6 +245,7 @@ function drawLines() {
     ctx.setLineDash([]);
   }
 
+  // live rectangle
   if (state.tool === 'shape' && state.shapeStart) {
     const A = state.shapeStart;
     const B = state.snapWorld;
@@ -208,11 +255,9 @@ function drawLines() {
       { x: B.x, y: B.y },
       { x: A.x, y: B.y }
     ];
-
     ctx.strokeStyle = state.currentColor;
     ctx.lineWidth = 2 / zoom;
     ctx.setLineDash([6 / zoom, 6 / zoom]);
-
     ctx.beginPath();
     ctx.moveTo(rect[0].x, rect[0].y);
     for (let i = 1; i < rect.length; i++) ctx.lineTo(rect[i].x, rect[i].y);
@@ -224,19 +269,20 @@ function drawLines() {
   ctx.restore();
 }
 
-// ---------- Preset shapes: geometry builders ----------
+// ---------- Preset geometry ----------
 
-// 2D triangle (equilateral)
+// Triangle (equilateral)
 function buildTriangle(center, scale) {
   const radius = BASE_R * 1.6 * scale;
-  const pts = [];
+  const raw = [];
   for (let i = 0; i < 3; i++) {
     const angle = -Math.PI / 2 + i * (2 * Math.PI / 3);
-    pts.push({
+    raw.push({
       x: center.x + radius * Math.cos(angle),
       y: center.y + radius * Math.sin(angle)
     });
   }
+  const pts = raw.map(p => snapPointForMode(p));
   const lines = [];
   for (let i = 0; i < 3; i++) {
     const a = pts[i];
@@ -246,17 +292,18 @@ function buildTriangle(center, scale) {
   return lines;
 }
 
-// 2D hexagon (regular)
+// Hexagon (regular)
 function buildHexagon(center, scale) {
   const radius = BASE_R * 1.4 * scale;
-  const pts = [];
+  const raw = [];
   for (let i = 0; i < 6; i++) {
     const angle = Math.PI / 6 + i * (2 * Math.PI / 6);
-    pts.push({
+    raw.push({
       x: center.x + radius * Math.cos(angle),
       y: center.y + radius * Math.sin(angle)
     });
   }
+  const pts = raw.map(p => snapPointForMode(p));
   const lines = [];
   for (let i = 0; i < 6; i++) {
     const a = pts[i];
@@ -266,7 +313,7 @@ function buildHexagon(center, scale) {
   return lines;
 }
 
-// Helper: cube vertices projected to 2D (simple isometric-ish)
+// Cube (3D-ish projection)
 function buildCube(center, scale) {
   const s = BASE_R * 1.2 * scale;
   const verts3D = [
@@ -286,32 +333,30 @@ function buildCube(center, scale) {
     return { x: center.x + px, y: center.y + py };
   }
 
-  const pts = verts3D.map(project);
+  const rawPts = verts3D.map(project);
+  const pts = rawPts.map(p => snapPointForMode(p));
 
   const edges = [
-    [0,1],[1,2],[2,3],[3,0], // bottom
-    [4,5],[5,6],[6,7],[7,4], // top
-    [0,4],[1,5],[2,6],[3,7]  // verticals
+    [0,1],[1,2],[2,3],[3,0],
+    [4,5],[5,6],[6,7],[7,4],
+    [0,4],[1,5],[2,6],[3,7]
   ];
 
-  const lines = edges.map(([i,j]) => ({
+  return edges.map(([i,j]) => ({
     a: pts[i],
     b: pts[j]
   }));
-  return lines;
 }
 
-// Tesseract frame: two cubes + connecting edges (simple 4D-style look)
+// Tesseract-like frame
 function buildTesseract(center, scale) {
-  const outer = buildCube(center, scale);
+  const outerScale = scale;
   const innerScale = scale * 0.6;
-  const inner = buildCube(center, innerScale);
 
-  // Inner and outer cubes have same vertex ordering, so connect corresponding points
-  const sOuter = BASE_R * 1.2 * scale;
+  const sOuter = BASE_R * 1.2 * outerScale;
   const sInner = BASE_R * 1.2 * innerScale;
 
-  const verts3DOuter = [
+  const verts3D = [
     [-1, -1, -1],
     [ 1, -1, -1],
     [ 1,  1, -1],
@@ -320,46 +365,43 @@ function buildTesseract(center, scale) {
     [ 1, -1,  1],
     [ 1,  1,  1],
     [-1,  1,  1]
-  ].map(v => v.map(x => x * sOuter));
+  ];
 
-  const verts3DInner = [
-    [-1, -1, -1],
-    [ 1, -1, -1],
-    [ 1,  1, -1],
-    [-1,  1, -1],
-    [-1, -1,  1],
-    [ 1, -1,  1],
-    [ 1,  1,  1],
-    [-1,  1,  1]
-  ].map(v => v.map(x => x * sInner));
-
+  function scaleVerts(scale) {
+    return verts3D.map(v => v.map(x => x * scale));
+  }
   function project([x, y, z]) {
     const px = x + z * 0.5;
     const py = y - z * 0.5;
     return { x: center.x + px, y: center.y + py };
   }
 
-  const outerPts = verts3DOuter.map(project);
-  const innerPts = verts3DInner.map(project);
+  const rawOuter = scaleVerts(sOuter).map(project);
+  const rawInner = scaleVerts(sInner).map(project);
 
-  const connectLines = [];
+  const outerPts = rawOuter.map(p => snapPointForMode(p));
+  const innerPts = rawInner.map(p => snapPointForMode(p));
+
+  const edgesCube = [
+    [0,1],[1,2],[2,3],[3,0],
+    [4,5],[5,6],[6,7],[7,4],
+    [0,4],[1,5],[2,6],[3,7]
+  ];
+
+  const lines = [];
+
+  edgesCube.forEach(([i,j]) => {
+    lines.push({ a: outerPts[i], b: outerPts[j] });
+    lines.push({ a: innerPts[i], b: innerPts[j] });
+  });
+
   for (let i = 0; i < 8; i++) {
-    connectLines.push({
-      a: outerPts[i],
-      b: innerPts[i]
-    });
+    lines.push({ a: outerPts[i], b: innerPts[i] });
   }
 
-  // Combine: edges of outer cube + inner cube + connectors
-  const tesseractLines = [];
-  tesseractLines.push(...outer);
-  tesseractLines.push(...inner);
-  tesseractLines.push(...connectLines);
-
-  return tesseractLines;
+  return lines;
 }
 
-// ---------- Preset ghost drawing ----------
 function buildPresetLines(type, center, scale) {
   if (!type) return [];
   if (type === 'triangle') return buildTriangle(center, scale);
@@ -369,6 +411,7 @@ function buildPresetLines(type, center, scale) {
   return [];
 }
 
+// ---------- Preset ghost ----------
 function drawPresetGhost() {
   if (!state.presetActive || !state.presetType) return;
 
@@ -395,12 +438,12 @@ function drawPresetGhost() {
   ctx.restore();
 }
 
-// ---------- Cursor ----------
+// ---------- Cursor / yellow dot ----------
 function drawSnapDot() {
   const s = worldToScreen(state.snapWorld.x, state.snapWorld.y);
 
   ctx.save();
-  ctx.fillStyle = '#ffe36a';
+  ctx.fillStyle = '#ffe36a'; // yellow
   ctx.shadowColor = '#ffe36a';
   ctx.shadowBlur = 8;
   ctx.beginPath();
@@ -416,6 +459,7 @@ function drawSnapDot() {
   ctx.moveTo(s.x, s.y - 6);
   ctx.lineTo(s.x, s.y + 6);
   ctx.stroke();
+
   ctx.restore();
 }
 
@@ -440,7 +484,7 @@ function hitTestLine(worldPoint, tol = 12 / zoom) {
   return best;
 }
 
-// ---------- Shape recognition (group) ----------
+// ---------- Shape grouping ----------
 function getConnectedShape(startIndex) {
   const visited = new Set();
   const stack = [startIndex];
@@ -466,7 +510,7 @@ function getConnectedShape(startIndex) {
   return visited;
 }
 
-// ---------- Render ----------
+// ---------- Rendering ----------
 function render() {
   drawGrid();
   drawLines();
@@ -487,7 +531,7 @@ canvas.addEventListener('mousemove', (e) => {
   }
 
   const world = screenToWorld(sx, sy);
-  state.snapWorld = snapToHexCenter(world.x, world.y);
+  state.snapWorld = snapPointForMode(world);
 
   if (state.transformDrag) {
     applyTransformDrag(world);
@@ -502,7 +546,7 @@ canvas.addEventListener('mousedown', (e) => {
   const sy = e.clientY - rect.top;
   const world = screenToWorld(sx, sy);
 
-  // Right-click = pan
+  // Right-click: pan
   if (e.button === 2) {
     state.isPanning = true;
     state.panStart = { x: e.clientX, y: e.clientY };
@@ -510,10 +554,11 @@ canvas.addEventListener('mousedown', (e) => {
     return;
   }
 
-  // If preset placement is active: place shape here
+  // Preset placement
   if (state.presetActive && state.presetType) {
     const center = state.snapWorld;
     const ghostLines = buildPresetLines(state.presetType, center, state.presetScale);
+    const startIdx = state.lines.length;
     ghostLines.forEach(gl => {
       state.lines.push({
         a: { ...gl.a },
@@ -521,8 +566,6 @@ canvas.addEventListener('mousedown', (e) => {
         color: state.currentColor
       });
     });
-    // select the newly added shape
-    const startIdx = state.lines.length - ghostLines.length;
     state.selection.clear();
     for (let i = startIdx; i < state.lines.length; i++) {
       state.selection.add(i);
@@ -531,7 +574,7 @@ canvas.addEventListener('mousedown', (e) => {
     return;
   }
 
-  // Normal tools
+  // Tools
   if (state.tool === 'line') {
     if (!state.drawingLine) {
       state.drawingLine = { a: { ...state.snapWorld }, b: { ...state.snapWorld } };
@@ -548,9 +591,7 @@ canvas.addEventListener('mousedown', (e) => {
       }
       state.drawingLine = null;
     }
-  }
-
-  else if (state.tool === 'shape') {
+  } else if (state.tool === 'shape') {
     if (!state.shapeStart) {
       state.shapeStart = { ...state.snapWorld };
     } else {
@@ -564,11 +605,11 @@ canvas.addEventListener('mousedown', (e) => {
       ];
       const startIdx = state.lines.length;
       for (let i = 0; i < 4; i++) {
-        const p1 = rect[i];
-        const p2 = rect[(i + 1) % 4];
+        const p1 = snapPointForMode(rect[i]);
+        const p2 = snapPointForMode(rect[(i + 1) % 4]);
         state.lines.push({
-          a: { ...p1 },
-          b: { ...p2 },
+          a: p1,
+          b: p2,
           color: state.currentColor
         });
       }
@@ -578,18 +619,14 @@ canvas.addEventListener('mousedown', (e) => {
         state.selection.add(i);
       }
     }
-  }
-
-  else if (state.tool === 'erase') {
+  } else if (state.tool === 'erase') {
     const hit = hitTestLine(world);
     if (hit >= 0) {
       state.lines.splice(hit, 1);
       state.selection.clear();
       render();
     }
-  }
-
-  else if (state.tool === 'select') {
+  } else if (state.tool === 'select') {
     const hit = hitTestLine(world);
     if (hit >= 0) {
       const shape = getConnectedShape(hit);
@@ -603,9 +640,8 @@ canvas.addEventListener('mousedown', (e) => {
     } else {
       if (!e.shiftKey) state.selection.clear();
     }
+    render();
   }
-
-  render();
 });
 
 canvas.addEventListener('mouseup', () => {
@@ -648,8 +684,8 @@ function applyTransformDrag(currentWorld) {
     const a1 = Math.atan2(currentWorld.y - center.y, currentWorld.x - center.x);
     angleDelta = a1 - a0;
     if (state.rotateSnap) {
-      const s = Math.PI / 12;
-      angleDelta = Math.round(angleDelta / s) * s;
+      const step = Math.PI / 12; // 15°
+      angleDelta = Math.round(angleDelta / step) * step;
     }
   }
 
@@ -663,10 +699,12 @@ function applyTransformDrag(currentWorld) {
     const ln = state.lines[o.i];
 
     function transformPoint(p0) {
-      let x = p0.x, y = p0.y;
+      let x = p0.x;
+      let y = p0.y;
 
       if (mode === 'move') {
-        x += dx; y += dy;
+        x += dx;
+        y += dy;
       } else if (mode === 'rotate') {
         const rx = p0.x - center.x;
         const ry = p0.y - center.y;
@@ -681,8 +719,8 @@ function applyTransformDrag(currentWorld) {
         y = center.y + ry * scaleFactor;
       }
 
-      if (mode === 'move' || (mode === 'rotate' && state.rotateSnap)) {
-        return maybeSnapPoint({ x, y });
+      if (state.snapMode !== 'free' && (mode === 'move' || (mode === 'rotate' && state.rotateSnap))) {
+        return snapPointForMode({ x, y });
       }
       return { x, y };
     }
@@ -696,7 +734,6 @@ function applyTransformDrag(currentWorld) {
 function getSelectionCenter() {
   const ids = [...state.selection];
   if (!ids.length) return null;
-
   let sx = 0, sy = 0, count = 0;
   ids.forEach(i => {
     const ln = state.lines[i];
@@ -731,7 +768,7 @@ window.addEventListener('keydown', (e) => {
     render();
   }
 
-  if (e.key === 'Delete' || e.key === 'Backspace') {
+  if (e.key === 'delete' || e.key === 'backspace') {
     const arr = [...state.selection].sort((a, b) => b - a);
     arr.forEach(i => state.lines.splice(i, 1));
     state.selection.clear();
@@ -739,19 +776,11 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-// ---------- View reset & clear ----------
+// ---------- View reset ----------
 btnReset.addEventListener('click', () => {
   panX = 0;
   panY = 0;
   zoom = 1;
-  render();
-});
-
-btnClear.addEventListener('click', () => {
-  state.lines = [];
-  state.selection.clear();
-  state.drawingLine = null;
-  state.shapeStart = null;
   render();
 });
 
@@ -770,9 +799,13 @@ colorPicker.addEventListener('input', e => {
   render();
 });
 
-// ---------- Save / Load / PNG ----------
-btnSave.addEventListener('click', () => {
-  const data = JSON.stringify({ lines: state.lines }, null, 2);
+// ---------- Save / Load / Clear / Export ----------
+function saveDrawing() {
+  const data = JSON.stringify({
+    lines: state.lines,
+    snapMode: state.snapMode
+  }, null, 2);
+
   const blob = new Blob([data], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -780,9 +813,11 @@ btnSave.addEventListener('click', () => {
   a.download = 'geoplayground.json';
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-});
+}
 
-btnLoad.addEventListener('click', () => fileInput.click());
+function loadDrawing() {
+  fileInput.click();
+}
 
 fileInput.addEventListener('change', (e) => {
   const file = e.target.files[0];
@@ -797,6 +832,8 @@ fileInput.addEventListener('change', (e) => {
           b: ln.b,
           color: ln.color || '#00ff55'
         }));
+        state.snapMode = data.snapMode || 'grid';
+        snapModeSelect.value = state.snapMode;
         state.selection.clear();
         render();
       }
@@ -808,17 +845,87 @@ fileInput.addEventListener('change', (e) => {
   e.target.value = '';
 });
 
-btnPNG.addEventListener('click', () => {
-  const link = document.createElement('a');
-  link.href = canvas.toDataURL('image/png');
-  link.download = 'geoplayground.png';
-  link.click();
+function clearCanvas() {
+  const ok = confirm('Clear the canvas? This cannot be undone.');
+  if (!ok) return;
+  state.lines = [];
+  state.selection.clear();
+  state.drawingLine = null;
+  state.shapeStart = null;
+  render();
+}
+
+function exportAll() {
+  render(); // ensure current
+
+  // JSON
+  const data = JSON.stringify({
+    lines: state.lines,
+    snapMode: state.snapMode
+  }, null, 2);
+  const blobJson = new Blob([data], { type: 'application/json' });
+  const urlJson = URL.createObjectURL(blobJson);
+  const aJson = document.createElement('a');
+  aJson.href = urlJson;
+  aJson.download = 'geoplayground.json';
+  aJson.click();
+  setTimeout(() => URL.revokeObjectURL(urlJson), 1000);
+
+  // PNG
+  canvas.toBlob((blobPng) => {
+    if (!blobPng) return;
+    const urlPng = URL.createObjectURL(blobPng);
+    const aPng = document.createElement('a');
+    aPng.href = urlPng;
+    aPng.download = 'geoplayground.png';
+    aPng.click();
+    setTimeout(() => URL.revokeObjectURL(urlPng), 1000);
+  }, 'image/png');
+
+  // SVG (shapes only)
+  const svgParts = [];
+  svgParts.push(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" fill="none">`
+  );
+  svgParts.push(`<g stroke-linecap="round" stroke-linejoin="round">`);
+
+  state.lines.forEach(ln => {
+    const a = worldToScreen(ln.a.x, ln.a.y);
+    const b = worldToScreen(ln.b.x, ln.b.y);
+    const color = ln.color || '#00ff55';
+    svgParts.push(
+      `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${color}" stroke-width="2" />`
+    );
+  });
+
+  svgParts.push(`</g></svg>`);
+  const svgBlob = new Blob(svgParts, { type: 'image/svg+xml' });
+  const urlSvg = URL.createObjectURL(svgBlob);
+  const aSvg = document.createElement('a');
+  aSvg.href = urlSvg;
+  aSvg.download = 'geoplayground.svg';
+  aSvg.click();
+  setTimeout(() => URL.revokeObjectURL(urlSvg), 1000);
+}
+
+// File menu clicks
+fileMenuItems.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const action = btn.dataset.fileAction;
+    if (action === 'save') saveDrawing();
+    if (action === 'load') loadDrawing();
+    if (action === 'clear') clearCanvas();
+    if (action === 'export') exportAll();
+  });
 });
 
-// ---------- Preset drawer logic ----------
+// Top-bar export icon
+btnExportAll.addEventListener('click', exportAll);
+
+// ---------- Preset drawer ----------
 btnPresets.addEventListener('click', () => {
-  const isOpen = presetDrawer.classList.toggle('open');
-  btnPresets.textContent = isOpen ? 'Presets ◂' : 'Presets ▸';
+  const opened = presetDrawer.classList.toggle('open');
+  btnPresets.textContent = opened ? 'Presets ◂' : 'Presets ▸';
 });
 
 function activatePreset(type) {
@@ -836,8 +943,13 @@ presetHexagonBtn.addEventListener('click', () => activatePreset('hexagon'));
 presetCubeBtn.addEventListener('click', () => activatePreset('cube'));
 presetTesseractBtn.addEventListener('click', () => activatePreset('tesseract'));
 
-presetSizeSlider.addEventListener('input', (e) => {
+presetSizeSlider.addEventListener('input', e => {
   state.presetScale = parseFloat(e.target.value) || 1.0;
+  render();
+});
+
+snapModeSelect.addEventListener('change', e => {
+  state.snapMode = e.target.value;
   render();
 });
 
@@ -862,7 +974,9 @@ canvas.addEventListener('wheel', (e) => {
   panX += sx - screenAfterX;
   panY += sy - screenAfterY;
 
-  state.snapWorld = snapToHexCenter(screenToWorld(sx, sy).x, screenToWorld(sx, sy).y);
+  const worldAfter = screenToWorld(sx, sy);
+  state.snapWorld = snapPointForMode(worldAfter);
+
   render();
 }, { passive: false });
 
@@ -885,5 +999,6 @@ function init() {
   setTool('select');
   setTransformMode('move');
   state.presetScale = parseFloat(presetSizeSlider.value) || 1.0;
+  state.snapMode = snapModeSelect.value;
 }
 init();
