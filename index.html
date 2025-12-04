@@ -1,161 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Geoplayground</title>
-<style>
-    body {
-        margin: 0;
-        background: #000;
-        color: #fff;
-        font-family: system-ui, sans-serif;
-        overflow: hidden;
-    }
-
-    .topbar {
-        height: 50px;
-        background: #111;
-        border-bottom: 1px solid #222;
-        display: flex;
-        align-items: center;
-        padding: 0 12px;
-        gap: 12px;
-        user-select: none;
-        z-index: 10;
-        position: relative;
-    }
-
-    .topbar button,
-    .topbar select,
-    .topbar input[type="color"] {
-        background: #222;
-        color: #fff;
-        border: 1px solid #333;
-        padding: 6px 10px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 13px;
-    }
-
-    .topbar button:hover {
-        border-color: #555;
-    }
-
-    #bubbleCanvas {
-        position: absolute;
-        top: 50px;
-        left: 0;
-        width: 100vw;
-        height: calc(100vh - 50px - 28px);
-        display: block;
-        cursor: none;
-    }
-
-    .statusbar {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        height: 28px;
-        width: 100%;
-        background: #111;
-        border-top: 1px solid #222;
-        display: flex;
-        align-items: center;
-        gap: 20px;
-        padding: 0 12px;
-        font-size: 13px;
-        color: #aaa;
-        user-select: none;
-        z-index: 10;
-    }
-
-    /* Right-side preset drawer */
-    .preset-drawer {
-        position: fixed;
-        top: 50px;
-        right: 0;
-        bottom: 28px;
-        width: 230px;
-        background: #111;
-        border-left: 1px solid #222;
-        transform: translateX(100%);
-        transition: transform 0.2s ease;
-        z-index: 20;
-        display: flex;
-        flex-direction: column;
-        padding: 10px;
-        box-sizing: border-box;
-    }
-
-    .preset-drawer.open {
-        transform: translateX(0);
-    }
-
-    .preset-header {
-        font-weight: 600;
-        margin-bottom: 6px;
-        font-size: 14px;
-    }
-
-    .preset-sub {
-        font-size: 12px;
-        color: #bbb;
-        margin-bottom: 10px;
-    }
-
-    .preset-group-title {
-        margin-top: 10px;
-        margin-bottom: 4px;
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: #999;
-    }
-
-    .preset-buttons {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin-bottom: 8px;
-    }
-
-    .preset-btn {
-        flex: 1 1 45%;
-        padding: 6px 4px;
-        font-size: 12px;
-        border-radius: 6px;
-        border: 1px solid #333;
-        background: #1a1a1a;
-        color: #fff;
-        cursor: pointer;
-    }
-
-    .preset-btn.active {
-        border-color: #ffe36a;
-        box-shadow: 0 0 0 1px rgba(255,227,106,0.4);
-    }
-
-    .preset-slider-row {
-        margin-top: 8px;
-        font-size: 12px;
-        color: #ccc;
-    }
-
-    .preset-slider-row input[type="range"] {
-        width: 100%;
-    }
-
-    .preset-hint {
-        margin-top: 10px;
-        font-size: 11px;
-        color: #888;
-        line-height: 1.4;
-    }
-</style>
+  <meta charset="UTF-8">
+  <title>Geoplayground — Bubble Graph</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <div class="topbar">
+    <div class="brand">Universe120 — Simple</div>
 
-<div class="topbar">
+    <!-- File menu (hover dropdown) -->
+    <div class="menu menu-file">
+      <div class="menu-label">File ▾</div>
+      <div class="menu-dropdown">
+        <button class="menu-item" data-file-action="save">Save</button>
+        <button class="menu-item" data-file-action="load">Load</button>
+        <button class="menu-item" data-file-action="export">Export All</button>
+        <button class="menu-item" data-file-action="clear">Clear Canvas</button>
+      </div>
+    </div>
+
+    <!-- Tool buttons -->
     <button class="toolBtn" data-tool="select">Select</button>
     <button class="toolBtn" data-tool="line">Line</button>
     <button class="toolBtn" data-tool="shape">Shape</button>
@@ -163,56 +28,68 @@
 
     <button id="btnDim">Dimensions: Off</button>
 
-    <input type="color" id="colorPicker" value="#00ff55">
+    <input type="color" id="colorPicker" value="#00ff55" title="Line Color">
 
     <button id="btnReset">Reset View</button>
-    <button id="btnClear">Clear Canvas</button>
-    <button id="btnSave">Save</button>
-    <button id="btnLoad">Load</button>
-    <button id="btnPNG">PNG</button>
 
-    <button id="btnPresets" style="margin-left:auto;">Presets ▸</button>
+    <!-- Presets drawer toggle -->
+    <button id="btnPresets" class="right-btn">Presets ▸</button>
 
-    <input type="file" id="fileInput" style="display:none;">
-</div>
+    <!-- Export All icon -->
+    <button id="btnExportAll" class="icon-btn" title="Export All (JSON + PNG + SVG)">
+      <span class="icon-square"></span>
+      <span class="icon-arrow"></span>
+    </button>
 
-<!-- Right-side preset drawer -->
-<div class="preset-drawer" id="presetDrawer">
+    <input type="file" id="fileInput" accept=".json" style="display:none;">
+  </div>
+
+  <!-- Right-side preset drawer -->
+  <div class="preset-drawer" id="presetDrawer">
     <div class="preset-header">Shape Presets</div>
-    <div class="preset-sub">Choose a shape, then click on the grid to place it.</div>
+    <div class="preset-sub">Pick a shape, then move your cursor and click to place.</div>
 
     <div class="preset-group-title">2D</div>
     <div class="preset-buttons">
-        <button class="preset-btn" id="presetTriangle">Triangle</button>
-        <button class="preset-btn" id="presetHexagon">Hexagon</button>
+      <button class="preset-btn" id="presetTriangle">Triangle</button>
+      <button class="preset-btn" id="presetHexagon">Hexagon</button>
     </div>
 
     <div class="preset-group-title">3D / 4D Projections</div>
     <div class="preset-buttons">
-        <button class="preset-btn" id="presetCube">Cube (3D)</button>
-        <button class="preset-btn" id="presetTesseract">Tesseract Frame</button>
+      <button class="preset-btn" id="presetCube">Cube (3D)</button>
+      <button class="preset-btn" id="presetTesseract">Tesseract Frame</button>
     </div>
 
-    <div class="preset-slider-row">
-        <div>Preset Size</div>
-        <input type="range" id="presetSize" min="0.5" max="2.5" step="0.1" value="1.0">
+    <div class="preset-section">
+      <div class="preset-label">Preset Size</div>
+      <input type="range" id="presetSize" min="0.5" max="2.5" step="0.1" value="1.0">
+    </div>
+
+    <div class="preset-section">
+      <div class="preset-label">Snap Mode</div>
+      <select id="snapModeSelect">
+        <option value="grid" selected>Grid Only</option>
+        <option value="gridMid">Grid + Midpoints</option>
+        <option value="free">Free (no snap)</option>
+      </select>
     </div>
 
     <div class="preset-hint">
-        • A white ghost preview follows your cursor.<br>
-        • Click to place the shape.<br>
-        • Press <strong>Esc</strong> to cancel preset mode.<br>
+      • White ghost preview follows your cursor.<br>
+      • Click to place snapped to the bubble grid.<br>
+      • Press <strong>Esc</strong> to cancel preset mode.
     </div>
-</div>
+  </div>
 
-<canvas id="bubbleCanvas"></canvas>
+  <canvas id="bubbleCanvas"></canvas>
 
-<div class="statusbar">
+  <div class="statusbar">
     <div id="stTool">Tool: select</div>
-    <div id="stTransform">Transform: move</div>
+    <div id="stTransform">Transform: move (M/R/S, F free, N snap)</div>
     <div id="stPos">x:0 y:0</div>
-</div>
+  </div>
 
-<script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
