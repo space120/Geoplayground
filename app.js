@@ -1,4 +1,5 @@
-// Geoplayground — Bubble Graph Builder (with presets, snap modes, and file/export menu)
+// Geoplayground — Bubble Graph Builder
+// Features: bubble grid, snap (grid / midpoints / free), presets, transform, Save/Load JSON only
 
 // ---------- DOM ----------
 const canvas = document.getElementById('bubbleCanvas');
@@ -25,7 +26,7 @@ const presetTesseractBtn = document.getElementById('presetTesseract');
 const presetSizeSlider = document.getElementById('presetSize');
 const snapModeSelect = document.getElementById('snapModeSelect');
 
-const btnExportAll = document.getElementById('btnExportAll');
+const btnExportAll = document.getElementById('btnExportAll'); // now acts as "Save" shortcut
 
 const presetButtons = [
   presetTriangleBtn,
@@ -63,7 +64,7 @@ const STEP_Y = BASE_R * Math.sqrt(3) / 2;
 // ---------- App state ----------
 const state = {
   tool: 'select',
-  lines: [],
+  lines: [],                // each: {a:{x,y}, b:{x,y}, color:"#.."}
   drawingLine: null,
   shapeStart: null,
   selection: new Set(),
@@ -73,9 +74,9 @@ const state = {
   panOrigin: { x: 0, y: 0 },
 
   showDimensions: false,
-  currentColor: '#00ff55',
+  currentColor: '#00ff55',  // neon green
 
-  transformMode: 'move',
+  transformMode: 'move',    // 'move' | 'rotate' | 'scale'
   transformDrag: null,
   rotateSnap: true,
 
@@ -222,7 +223,7 @@ function drawLines() {
 
   state.lines.forEach((ln, i) => {
     const selected = state.selection.has(i);
-    ctx.strokeStyle = selected ? '#ffe36a' : (ln.color || '#00ff55'); // yellow / neon green
+    ctx.strokeStyle = selected ? '#ffe36a' : (ln.color || '#00ff55'); // yellow = selected, green = default
     ctx.lineWidth = selected ? (3 / zoom) : (2 / zoom);
 
     ctx.beginPath();
@@ -245,7 +246,7 @@ function drawLines() {
     ctx.setLineDash([]);
   }
 
-  // live rectangle
+  // live rectangle for shape tool
   if (state.tool === 'shape' && state.shapeStart) {
     const A = state.shapeStart;
     const B = state.snapWorld;
@@ -367,8 +368,8 @@ function buildTesseract(center, scale) {
     [-1,  1,  1]
   ];
 
-  function scaleVerts(scale) {
-    return verts3D.map(v => v.map(x => x * scale));
+  function scaleVerts(scaleVal) {
+    return verts3D.map(v => v.map(x => x * scaleVal));
   }
   function project([x, y, z]) {
     const px = x + z * 0.5;
@@ -765,6 +766,8 @@ window.addEventListener('keydown', (e) => {
     state.presetActive = false;
     state.presetType = null;
     presetButtons.forEach(b => b.classList.remove('active'));
+    state.drawingLine = null;
+    state.shapeStart = null;
     render();
   }
 
@@ -799,20 +802,38 @@ colorPicker.addEventListener('input', e => {
   render();
 });
 
-// ---------- Save / Load / Clear / Export ----------
-function saveDrawing() {
-  const data = JSON.stringify({
+// ---------- SAVE / LOAD (JSON only, with Save As...) ----------
+function getProjectData() {
+  return {
     lines: state.lines,
-    snapMode: state.snapMode
-  }, null, 2);
+    snapMode: state.snapMode,
+    version: "1.1"
+  };
+}
 
-  const blob = new Blob([data], { type: 'application/json' });
+// "Save" behavior used by File → Save, File → Export All, and the top icon
+function saveDrawing() {
+  const defaultName = "Universe120_Project";
+  let fileName = prompt("Save As:", defaultName);
+  if (!fileName) return; // user cancelled
+
+  fileName = fileName.trim();
+  if (!fileName.toLowerCase().endsWith(".json")) {
+    fileName += ".json";
+  }
+
+  const data = getProjectData();
+  const json = JSON.stringify(data, null, 2);
+
+  const blob = new Blob([json], { type: "application/json" });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+
+  const a = document.createElement("a");
   a.href = url;
-  a.download = 'geoplayground.json';
+  a.download = fileName;
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
 function loadDrawing() {
@@ -822,29 +843,40 @@ function loadDrawing() {
 fileInput.addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
+
   const reader = new FileReader();
   reader.onload = (ev) => {
     try {
       const data = JSON.parse(ev.target.result);
-      if (Array.isArray(data.lines)) {
-        state.lines = data.lines.map(ln => ({
-          a: ln.a,
-          b: ln.b,
-          color: ln.color || '#00ff55'
-        }));
-        state.snapMode = data.snapMode || 'grid';
-        snapModeSelect.value = state.snapMode;
-        state.selection.clear();
-        render();
+
+      if (!Array.isArray(data.lines)) {
+        alert("Invalid project file (no lines found).");
+        return;
       }
-    } catch {
-      alert('Invalid file.');
+
+      state.lines = data.lines.map(ln => ({
+        a: ln.a,
+        b: ln.b,
+        color: ln.color || '#00ff55'
+      }));
+      state.selection.clear();
+
+      state.snapMode = data.snapMode || 'grid';
+      snapModeSelect.value = state.snapMode;
+
+      render();
+      alert("Project loaded successfully!");
+
+    } catch (err) {
+      alert("Error loading file: " + err.message);
     }
   };
+
   reader.readAsText(file);
-  e.target.value = '';
+  e.target.value = "";
 });
 
+// Clear canvas
 function clearCanvas() {
   const ok = confirm('Clear the canvas? This cannot be undone.');
   if (!ok) return;
@@ -855,59 +887,6 @@ function clearCanvas() {
   render();
 }
 
-function exportAll() {
-  render(); // ensure current
-
-  // JSON
-  const data = JSON.stringify({
-    lines: state.lines,
-    snapMode: state.snapMode
-  }, null, 2);
-  const blobJson = new Blob([data], { type: 'application/json' });
-  const urlJson = URL.createObjectURL(blobJson);
-  const aJson = document.createElement('a');
-  aJson.href = urlJson;
-  aJson.download = 'geoplayground.json';
-  aJson.click();
-  setTimeout(() => URL.revokeObjectURL(urlJson), 1000);
-
-  // PNG
-  canvas.toBlob((blobPng) => {
-    if (!blobPng) return;
-    const urlPng = URL.createObjectURL(blobPng);
-    const aPng = document.createElement('a');
-    aPng.href = urlPng;
-    aPng.download = 'geoplayground.png';
-    aPng.click();
-    setTimeout(() => URL.revokeObjectURL(urlPng), 1000);
-  }, 'image/png');
-
-  // SVG (shapes only)
-  const svgParts = [];
-  svgParts.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" fill="none">`
-  );
-  svgParts.push(`<g stroke-linecap="round" stroke-linejoin="round">`);
-
-  state.lines.forEach(ln => {
-    const a = worldToScreen(ln.a.x, ln.a.y);
-    const b = worldToScreen(ln.b.x, ln.b.y);
-    const color = ln.color || '#00ff55';
-    svgParts.push(
-      `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${color}" stroke-width="2" />`
-    );
-  });
-
-  svgParts.push(`</g></svg>`);
-  const svgBlob = new Blob(svgParts, { type: 'image/svg+xml' });
-  const urlSvg = URL.createObjectURL(svgBlob);
-  const aSvg = document.createElement('a');
-  aSvg.href = urlSvg;
-  aSvg.download = 'geoplayground.svg';
-  aSvg.click();
-  setTimeout(() => URL.revokeObjectURL(urlSvg), 1000);
-}
-
 // File menu clicks
 fileMenuItems.forEach(btn => {
   btn.addEventListener('click', () => {
@@ -915,12 +894,15 @@ fileMenuItems.forEach(btn => {
     if (action === 'save') saveDrawing();
     if (action === 'load') loadDrawing();
     if (action === 'clear') clearCanvas();
-    if (action === 'export') exportAll();
+    // "export" now just behaves like Save (JSON only, no PNG/SVG)
+    if (action === 'export') saveDrawing();
   });
 });
 
-// Top-bar export icon
-btnExportAll.addEventListener('click', exportAll);
+// Top-bar export icon now = Save
+if (btnExportAll) {
+  btnExportAll.addEventListener('click', saveDrawing);
+}
 
 // ---------- Preset drawer ----------
 btnPresets.addEventListener('click', () => {
